@@ -8,6 +8,7 @@ import javafx.scene.Scene;
 import javafx.stage.Stage;
 
 public class HelloApplication extends Application {
+
     @Override
     public void start(Stage stage) {
         Game game = new Game();
@@ -19,6 +20,7 @@ public class HelloApplication extends Application {
         stage.setResizable(false);
         stage.show();
 
-        new GameLoop(game, view::render).start();
+        GameLoop loop = new GameLoop(game, view);
+        loop.start();
     }
 }
