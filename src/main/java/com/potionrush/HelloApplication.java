@@ -1,19 +1,24 @@
 package com.potionrush;
 
+import com.potionrush.core.Game;
+import com.potionrush.core.GameLoop;
+import com.potionrush.ui.GameView;
 import javafx.application.Application;
-import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
 
-import java.io.IOException;
-
 public class HelloApplication extends Application {
     @Override
-    public void start(Stage stage) throws IOException {
-        FXMLLoader fxmlLoader = new FXMLLoader(HelloApplication.class.getResource("hello-view.fxml"));
-        Scene scene = new Scene(fxmlLoader.load(), 320, 240);
-        stage.setTitle("Hello!");
+    public void start(Stage stage) {
+        Game game = new Game();
+        GameView view = new GameView(game);
+
+        Scene scene = new Scene(view, GameView.LEBAR, GameView.TINGGI);
+        stage.setTitle("Potion Rush");
         stage.setScene(scene);
+        stage.setResizable(false);
         stage.show();
+
+        new GameLoop(game, view::render).start();
     }
 }
