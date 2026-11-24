@@ -3,85 +3,241 @@ package com.potionrush.ui;
 import com.potionrush.brewing.Cauldron;
 import com.potionrush.brewing.CauldronState;
 import com.potionrush.brewing.Ingredient;
-import com.potionrush.brewing.PotionType;
+import com.potionrush.brewing.Recipe;
 import com.potionrush.core.Game;
+import com.potionrush.core.ScreenState;
 import com.potionrush.customer.Customer;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
+import javafx.scene.text.TextAlignment;
 
-import java.util.List;
+import java.util.ArrayList;
 
-// Tampilan permainan: menggambar isi Game ke layar dan menerima klik mouse
 public class GameView extends Pane {
+
     public static final int LEBAR = 1280;
     public static final int TINGGI = 720;
 
-    // Posisi area-area yang bisa diklik
-    private static final double PETUALANG_X = 60, PETUALANG_Y = 90, PETUALANG_W = 220, PETUALANG_H = 170, PETUALANG_JARAK = 250;
-    private static final double KUALI_X = 120, KUALI_Y = 330, KUALI_W = 240, KUALI_H = 170, KUALI_JARAK = 300;
-    private static final double BAHAN_X = 60, BAHAN_Y = 560, BAHAN_W = 140, BAHAN_H = 80, BAHAN_JARAK = 160;
-    private static final double UNDO_X = 880, UNDO_Y = 560, UNDO_W = 140, UNDO_H = 80;
+    // Posisi dan ukuran kotak petualang
+    private static final double PETUALANG_X = 60;
+    private static final double PETUALANG_Y = 90;
+    private static final double PETUALANG_LEBAR = 220;
+    private static final double PETUALANG_TINGGI = 170;
+    private static final double PETUALANG_JARAK = 250;
 
-    private final Game game;
-    private final Canvas canvas = new Canvas(LEBAR, TINGGI);
-    private final GraphicsContext g = canvas.getGraphicsContext2D();
+    // Posisi dan ukuran kotak kuali
+    private static final double KUALI_X = 120;
+    private static final double KUALI_Y = 330;
+    private static final double KUALI_LEBAR = 240;
+    private static final double KUALI_TINGGI = 170;
+    private static final double KUALI_JARAK = 300;
+
+    // Posisi dan ukuran kotak bahan
+    private static final double BAHAN_X = 60;
+    private static final double BAHAN_Y = 560;
+    private static final double BAHAN_LEBAR = 140;
+    private static final double BAHAN_TINGGI = 80;
+    private static final double BAHAN_JARAK = 160;
+
+    // Posisi dan ukuran tombol undo
+    private static final double UNDO_X = 880;
+    private static final double UNDO_Y = 560;
+    private static final double UNDO_LEBAR = 140;
+    private static final double UNDO_TINGGI = 80;
+
+    // Tombol di tengah layar, dipakai di layar MENU, RINGKASAN, dan GAME_OVER
+    private static final double TOMBOL_X = 490;
+    private static final double TOMBOL_Y = 500;
+    private static final double TOMBOL_LEBAR = 300;
+    private static final double TOMBOL_TINGGI = 80;
+
+    private Game game;
+    private Canvas canvas;
+    private GraphicsContext g;
 
     public GameView(Game game) {
         this.game = game;
+        canvas = new Canvas(LEBAR, TINGGI);
+        g = canvas.getGraphicsContext2D();
         getChildren().add(canvas);
-        canvas.setOnMouseClicked(e -> tanganiKlik(e.getX(), e.getY()));
+
+        // Setiap kali canvas diklik, panggil tanganiKlik dengan posisi mouse
+        canvas.setOnMouseClicked(event -> tanganiKlik(event.getX(), event.getY()));
     }
 
-    // ===================== KLIK MOUSE =====================
+    // =====================================================
+    // KLIK MOUSE
+    // =====================================================
 
-    private void tanganiKlik(double x, double y) {
-        // Petualang
+    private void tanganiKlik(double klikX, double klikY) {
+        ScreenState layar = game.getLayar();
+
+        if (layar == ScreenState.MENU) {
+            if (klikDiTombol(klikX, klikY)) {
+                game.mulai();
+            }
+        } else if (layar == ScreenState.MAIN) {
+            tanganiKlikSaatMain(klikX, klikY);
+        } else if (layar == ScreenState.RINGKASAN) {
+            if (klikDiTombol(klikX, klikY)) {
+                game.lanjutHari();
+            }
+        } else if (layar == ScreenState.GAME_OVER) {
+            if (klikDiTombol(klikX, klikY)) {
+                game.keMenu();
+            }
+        }
+    }
+
+    private void tanganiKlikSaatMain(double klikX, double klikY) {
+        // Cek apakah yang diklik petualang
         for (int i = 0; i < Game.MAKS_PETUALANG; i++) {
-            if (di(x, y, PETUALANG_X + i * PETUALANG_JARAK, PETUALANG_Y, PETUALANG_W, PETUALANG_H)) {
+            double x = PETUALANG_X + i * PETUALANG_JARAK;
+            if (klikDiDalamKotak(klikX, klikY, x, PETUALANG_Y, PETUALANG_LEBAR, PETUALANG_TINGGI)) {
                 game.klikPetualang(i);
                 return;
             }
         }
-        // Kuali
+
+        // Cek apakah yang diklik kuali
         for (int i = 0; i < game.getKuali().size(); i++) {
-            if (di(x, y, KUALI_X + i * KUALI_JARAK, KUALI_Y, KUALI_W, KUALI_H)) {
+            double x = KUALI_X + i * KUALI_JARAK;
+            if (klikDiDalamKotak(klikX, klikY, x, KUALI_Y, KUALI_LEBAR, KUALI_TINGGI)) {
                 game.klikKuali(i);
                 return;
             }
         }
-        // Bahan
+
+        // Cek apakah yang diklik bahan
         Ingredient[] semuaBahan = Ingredient.values();
         for (int i = 0; i < semuaBahan.length; i++) {
-            if (di(x, y, BAHAN_X + i * BAHAN_JARAK, BAHAN_Y, BAHAN_W, BAHAN_H)) {
+            double x = BAHAN_X + i * BAHAN_JARAK;
+            if (klikDiDalamKotak(klikX, klikY, x, BAHAN_Y, BAHAN_LEBAR, BAHAN_TINGGI)) {
                 game.klikBahan(semuaBahan[i]);
                 return;
             }
         }
-        // Tombol Undo
-        if (di(x, y, UNDO_X, UNDO_Y, UNDO_W, UNDO_H)) {
+
+        // Cek apakah yang diklik tombol undo
+        if (klikDiDalamKotak(klikX, klikY, UNDO_X, UNDO_Y, UNDO_LEBAR, UNDO_TINGGI)) {
             game.undo();
         }
     }
 
-    // true kalau titik (x, y) ada di dalam kotak
-    private boolean di(double x, double y, double kx, double ky, double kw, double kh) {
-        return x >= kx && x <= kx + kw && y >= ky && y <= ky + kh;
+    // Mengecek apakah titik klik berada di dalam sebuah kotak
+    private boolean klikDiDalamKotak(double klikX, double klikY,
+                                     double kotakX, double kotakY,
+                                     double lebar, double tinggi) {
+        boolean dalamSisiKiriKanan = klikX >= kotakX && klikX <= kotakX + lebar;
+        boolean dalamSisiAtasBawah = klikY >= kotakY && klikY <= kotakY + tinggi;
+        return dalamSisiKiriKanan && dalamSisiAtasBawah;
     }
 
-    // ===================== MENGGAMBAR =====================
+    private boolean klikDiTombol(double klikX, double klikY) {
+        return klikDiDalamKotak(klikX, klikY, TOMBOL_X, TOMBOL_Y, TOMBOL_LEBAR, TOMBOL_TINGGI);
+    }
+
+    // =====================================================
+    // MENGGAMBAR
+    // =====================================================
 
     // Dipanggil GameLoop setiap frame
     public void render() {
+        g.setTextAlign(TextAlignment.LEFT);
         g.setFill(Color.web("#2b2238"));
         g.fillRect(0, 0, LEBAR, TINGGI);
 
+        ScreenState layar = game.getLayar();
+
+        if (layar == ScreenState.MENU) {
+            gambarMenu();
+        } else if (layar == ScreenState.MAIN) {
+            gambarLayarMain();
+        } else if (layar == ScreenState.RINGKASAN) {
+            gambarRingkasan();
+        } else if (layar == ScreenState.GAME_OVER) {
+            gambarGameOver();
+        }
+    }
+
+    // ----- Layar MENU -----
+
+    private void gambarMenu() {
+        g.setTextAlign(TextAlignment.CENTER);
+
+        g.setFill(Color.web("#e8c46a"));
+        g.setFont(Font.font("System", FontWeight.BOLD, 72));
+        g.fillText("POTION RUSH", LEBAR / 2, 220);
+
+        g.setFill(Color.WHITE);
+        g.setFont(Font.font(22));
+        g.fillText("Brew potions to match each adventurer's order before they run out of patience.", LEBAR / 2, 300);
+        g.fillText("Click an ingredient, click a cauldron, boil it, then serve the adventurer.", LEBAR / 2, 340);
+
+        gambarTombol("START");
+    }
+
+    // ----- Layar RINGKASAN -----
+
+    private void gambarRingkasan() {
+        int hari = game.getSession().getHari();
+
+        g.setTextAlign(TextAlignment.CENTER);
+
+        g.setFill(Color.web("#7bd88f"));
+        g.setFont(Font.font("System", FontWeight.BOLD, 56));
+        g.fillText("DAY " + hari + " COMPLETE", LEBAR / 2, 170);
+
+        g.setFill(Color.WHITE);
+        g.setFont(Font.font(26));
+        g.fillText("Coins today: " + game.getKoinHariIni() + " / " + game.getTargetHari(), LEBAR / 2, 260);
+        g.fillText("Adventurers served: " + game.getDilayaniHariIni(), LEBAR / 2, 310);
+        g.fillText("Adventurers who left: " + game.getPergiHariIni(), LEBAR / 2, 360);
+        g.fillText("Total coins: " + game.getSession().getKoin(), LEBAR / 2, 410);
+
+        gambarTombol("GO TO DAY " + (hari + 1));
+    }
+
+    // ----- Layar GAME_OVER -----
+
+    private void gambarGameOver() {
+        g.setTextAlign(TextAlignment.CENTER);
+
+        g.setFill(Color.CRIMSON);
+        g.setFont(Font.font("System", FontWeight.BOLD, 72));
+        g.fillText("GAME OVER", LEBAR / 2, 200);
+
+        g.setFill(Color.WHITE);
+        g.setFont(Font.font(26));
+        g.fillText(game.getAlasanGameOver(), LEBAR / 2, 280);
+        g.fillText("You reached day " + game.getSession().getHari(), LEBAR / 2, 340);
+        g.fillText("Total coins: " + game.getSession().getKoin(), LEBAR / 2, 390);
+
+        gambarTombol("BACK TO MENU");
+    }
+
+    private void gambarTombol(String tulisan) {
+        gambarKotak(TOMBOL_X, TOMBOL_Y, TOMBOL_LEBAR, TOMBOL_TINGGI, Color.web("#7a5fb0"));
+
+        g.setTextAlign(TextAlignment.CENTER);
+        g.setFill(Color.WHITE);
+        g.setFont(Font.font("System", FontWeight.BOLD, 24));
+        g.fillText(tulisan, TOMBOL_X + TOMBOL_LEBAR / 2, TOMBOL_Y + 50);
+        g.setTextAlign(TextAlignment.LEFT);
+    }
+
+    // ----- Layar MAIN -----
+
+    private void gambarLayarMain() {
         gambarHud();
         gambarPetualang();
         gambarKuali();
         gambarBahan();
+        gambarTombolUndo();
         gambarPapanResep();
         gambarPesan();
     }
@@ -89,131 +245,158 @@ public class GameView extends Pane {
     private void gambarHud() {
         g.setFill(Color.WHITE);
         g.setFont(Font.font(22));
-        g.fillText("Hari " + game.getSession().getHari(), 30, 45);
-        g.fillText("Waktu: " + (int) game.getSisaWaktuHari() + " dtk", 200, 45);
-        g.fillText("Koin: " + game.getSession().getKoin() + " / " + Game.TARGET_KOIN, 450, 45);
-        g.fillText("Reputasi: " + game.getSession().getReputasi(), 700, 45);
+        g.fillText("Day " + game.getSession().getHari(), 30, 45);
+        g.fillText("Time: " + (int) game.getSisaWaktuHari() + " s", 160, 45);
+        g.fillText("Coins today: " + game.getKoinHariIni() + " / " + game.getTargetHari(), 380, 45);
+        g.fillText("Total coins: " + game.getSession().getKoin(), 700, 45);
+        g.fillText("Reputation: " + game.getSession().getReputasi(), 920, 45);
     }
 
     private void gambarPetualang() {
-        List<Customer> daftar = game.getPetualang();
+        ArrayList<Customer> daftarPetualang = game.getPetualang();
+
         for (int i = 0; i < Game.MAKS_PETUALANG; i++) {
             double x = PETUALANG_X + i * PETUALANG_JARAK;
-            kotak(x, PETUALANG_Y, PETUALANG_W, PETUALANG_H, Color.web("#3d3150"));
-            if (i >= daftar.size()) {
+            gambarKotak(x, PETUALANG_Y, PETUALANG_LEBAR, PETUALANG_TINGGI, Color.web("#3d3150"));
+
+            // Slot kosong kalau belum ada petualang di posisi ini
+            if (i >= daftarPetualang.size()) {
                 g.setFill(Color.GRAY);
                 g.setFont(Font.font(16));
-                g.fillText("(kosong)", x + 75, PETUALANG_Y + 90);
+                g.fillText("(empty)", x + 80, PETUALANG_Y + 90);
                 continue;
             }
-            Customer c = daftar.get(i);
+
+            Customer petualang = daftarPetualang.get(i);
+
             g.setFill(Color.WHITE);
             g.setFont(Font.font(20));
-            g.fillText(c.getJenis(), x + 15, PETUALANG_Y + 35);
+            g.fillText(petualang.getJenis(), x + 15, PETUALANG_Y + 35);
             g.setFont(Font.font(16));
-            g.fillText("Pesan: " + c.getPesanan(), x + 15, PETUALANG_Y + 75);
+            g.fillText("Order: " + DisplayName.ramuan(petualang.getPesanan()), x + 15, PETUALANG_Y + 75);
 
-            // Bar kesabaran
-            double lebarBar = PETUALANG_W - 30;
+            // Bar kesabaran: latar gelap, lalu isi berwarna sesuai sisa kesabaran
+            double lebarBar = PETUALANG_LEBAR - 30;
+            double lebarIsi = lebarBar * petualang.getPersenKesabaran();
+
             g.setFill(Color.web("#1a1424"));
             g.fillRect(x + 15, PETUALANG_Y + 120, lebarBar, 20);
-            g.setFill(warnaBar(c.getTingkatKesabaran()));
-            g.fillRect(x + 15, PETUALANG_Y + 120, lebarBar * c.getPersenKesabaran(), 20);
+            g.setFill(warnaBarKesabaran(petualang.getTingkatKesabaran()));
+            g.fillRect(x + 15, PETUALANG_Y + 120, lebarIsi, 20);
         }
     }
 
-    private Color warnaBar(String tingkat) {
+    private Color warnaBarKesabaran(String tingkat) {
         if (tingkat.equals("HIJAU")) {
             return Color.LIMEGREEN;
         } else if (tingkat.equals("KUNING")) {
             return Color.GOLD;
+        } else {
+            return Color.CRIMSON;
         }
-        return Color.CRIMSON;
     }
 
     private void gambarKuali() {
-        List<Cauldron> daftar = game.getKuali();
-        for (int i = 0; i < daftar.size(); i++) {
-            Cauldron k = daftar.get(i);
+        ArrayList<Cauldron> daftarKuali = game.getKuali();
+
+        for (int i = 0; i < daftarKuali.size(); i++) {
+            Cauldron kuali = daftarKuali.get(i);
             double x = KUALI_X + i * KUALI_JARAK;
-            kotak(x, KUALI_Y, KUALI_W, KUALI_H, warnaKuali(k.getStatus()));
+
+            gambarKotak(x, KUALI_Y, KUALI_LEBAR, KUALI_TINGGI, warnaKuali(kuali.getStatus()));
 
             g.setFill(Color.WHITE);
             g.setFont(Font.font(20));
-            g.fillText("Kuali " + (i + 1) + " - " + k.getStatus(), x + 15, KUALI_Y + 35);
+            g.fillText("Cauldron " + (i + 1) + " - " + DisplayName.statusKuali(kuali.getStatus()), x + 15, KUALI_Y + 35);
             g.setFont(Font.font(15));
-            g.fillText("Isi: " + k.getIsi(), x + 15, KUALI_Y + 75);
+            g.fillText("Contents: " + DisplayName.daftarBahan(kuali.getIsi()), x + 15, KUALI_Y + 75);
 
-            if (k.getStatus() == CauldronState.MENDIDIH) {
-                g.fillText("Sisa: " + String.format("%.1f", k.getSisaWaktuMendidih()) + " dtk", x + 15, KUALI_Y + 110);
-            } else if (k.getStatus() == CauldronState.SIAP) {
-                PotionType hasil = k.getHasil();
-                String teks = (hasil == null) ? "GAGAL" : hasil.toString();
-                g.fillText("Hasil: " + teks, x + 15, KUALI_Y + 110);
+            if (kuali.getStatus() == CauldronState.MENDIDIH) {
+                int sisaDetik = (int) Math.ceil(kuali.getSisaWaktuMendidih());
+                g.fillText("Time left: " + sisaDetik + " s", x + 15, KUALI_Y + 110);
+            } else if (kuali.getStatus() == CauldronState.SIAP) {
+                if (kuali.getHasil() == null) {
+                    g.fillText("Result: FAILED", x + 15, KUALI_Y + 110);
+                } else {
+                    g.fillText("Result: " + DisplayName.ramuan(kuali.getHasil()), x + 15, KUALI_Y + 110);
+                }
             }
         }
     }
 
     private Color warnaKuali(CauldronState status) {
-        switch (status) {
-            case DIISI:
-                return Color.web("#4a3f6b");
-            case MENDIDIH:
-                return Color.web("#8a4b2a");
-            case SIAP:
-                return Color.web("#2f6b4a");
-            default:
-                return Color.web("#3d3150");
+        if (status == CauldronState.DIISI) {
+            return Color.web("#4a3f6b");
+        } else if (status == CauldronState.MENDIDIH) {
+            return Color.web("#8a4b2a");
+        } else if (status == CauldronState.SIAP) {
+            return Color.web("#2f6b4a");
+        } else {
+            return Color.web("#3d3150");
         }
     }
 
     private void gambarBahan() {
         Ingredient[] semuaBahan = Ingredient.values();
+
         for (int i = 0; i < semuaBahan.length; i++) {
             double x = BAHAN_X + i * BAHAN_JARAK;
-            Color warna = (semuaBahan[i] == game.getBahanDipegang()) ? Color.web("#7a5fb0") : Color.web("#3d3150");
-            kotak(x, BAHAN_Y, BAHAN_W, BAHAN_H, warna);
+
+            // Bahan yang sedang dipegang diberi warna lebih terang
+            Color warna = Color.web("#3d3150");
+            if (semuaBahan[i] == game.getBahanDipegang()) {
+                warna = Color.web("#7a5fb0");
+            }
+
+            gambarKotak(x, BAHAN_Y, BAHAN_LEBAR, BAHAN_TINGGI, warna);
             g.setFill(Color.WHITE);
             g.setFont(Font.font(18));
-            g.fillText(semuaBahan[i].toString(), x + 20, BAHAN_Y + 47);
+            g.fillText(DisplayName.bahan(semuaBahan[i]), x + 20, BAHAN_Y + 47);
         }
-        kotak(UNDO_X, UNDO_Y, UNDO_W, UNDO_H, Color.web("#6b2f3a"));
+    }
+
+    private void gambarTombolUndo() {
+        gambarKotak(UNDO_X, UNDO_Y, UNDO_LEBAR, UNDO_TINGGI, Color.web("#6b2f3a"));
         g.setFill(Color.WHITE);
+        g.setFont(Font.font(18));
         g.fillText("UNDO", UNDO_X + 45, UNDO_Y + 47);
     }
 
     private void gambarPapanResep() {
-        double x = 1000, y = 90;
-        kotak(x, y, 250, 410, Color.web("#3a2c22"));
+        double x = 1000;
+        double y = 90;
+        gambarKotak(x, y, 250, 410, Color.web("#3a2c22"));
+
         g.setFill(Color.WHEAT);
         g.setFont(Font.font(20));
-        g.fillText("PAPAN RESEP", x + 60, y + 35);
+        g.fillText("RECIPES", x + 80, y + 35);
+
+        // Setiap resep ditulis dua baris: nama ramuan, lalu urutan bahannya
         g.setFont(Font.font(14));
-        g.fillText("PENYEMBUH:", x + 15, y + 80);
-        g.fillText("DAUN > KRISTAL", x + 15, y + 100);
-        g.fillText("KEKUATAN:", x + 15, y + 150);
-        g.fillText("JAMUR > TULANG", x + 15, y + 170);
-        g.fillText("RACUN:", x + 15, y + 220);
-        g.fillText("JAMUR > DAUN > TULANG", x + 15, y + 240);
-        g.fillText("TAK_TERLIHAT:", x + 15, y + 290);
-        g.fillText("BUNGA > KRISTAL > DAUN", x + 15, y + 310);
+        double barisY = y + 80;
+        for (Recipe resep : Recipe.semuaResep()) {
+            g.fillText(DisplayName.ramuan(resep.getHasil()) + ":", x + 15, barisY);
+            g.fillText(DisplayName.daftarBahan(resep.getUrutanBahan()), x + 15, barisY + 20);
+            barisY = barisY + 70;
+        }
     }
 
     private void gambarPesan() {
+        String barangDipegang = "Holding nothing";
+        if (game.getBahanDipegang() != null) {
+            barangDipegang = "Holding: " + DisplayName.bahan(game.getBahanDipegang());
+        } else if (game.getRamuanDipegang() != null) {
+            barangDipegang = "Holding: " + DisplayName.ramuan(game.getRamuanDipegang());
+        }
+
         g.setFill(Color.WHITE);
         g.setFont(Font.font(18));
-        String dipegang = "Tangan kosong";
-        if (game.getBahanDipegang() != null) {
-            dipegang = "Memegang bahan: " + game.getBahanDipegang();
-        } else if (game.getRamuanDipegang() != null) {
-            dipegang = "Memegang ramuan: " + game.getRamuanDipegang();
-        }
-        g.fillText(dipegang, 30, 685);
+        g.fillText(barangDipegang, 30, 685);
         g.fillText(game.getPesan(), 400, 685);
     }
 
-    private void kotak(double x, double y, double w, double h, Color warna) {
+    private void gambarKotak(double x, double y, double lebar, double tinggi, Color warna) {
         g.setFill(warna);
-        g.fillRoundRect(x, y, w, h, 16, 16);
+        g.fillRoundRect(x, y, lebar, tinggi, 16, 16);
     }
 }
