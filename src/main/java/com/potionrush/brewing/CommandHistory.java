@@ -1,17 +1,23 @@
 package com.potionrush.brewing;
-import java.util.ArrayDeque;
-import java.util.Deque;
-// Menyimpan riwayat aksi supaya bisa di-undo (aksi terakhir dibatalkan duluan)
+import java.util.ArrayList;
+
 public class CommandHistory {
-    private final Deque<Command> riwayat = new ArrayDeque<>();
+    private ArrayList<Command> riwayat = new ArrayList<>();
     public void jalankan(Command aksi) {
         aksi.execute();
-        riwayat.push(aksi);
+        riwayat.add(aksi);
     }
-    public void undo() {
-        if (!riwayat.isEmpty()) {
-            riwayat.pop().undo();
+    public boolean undo() {
+        if (riwayat.isEmpty()) {
+            return false;
         }
+        int indexTerakhir = riwayat.size() - 1;
+        Command aksiTerakhir = riwayat.remove(indexTerakhir);
+
+        return aksiTerakhir.undo();
+    }
+    public void hapusSemua() {
+        riwayat.clear();
     }
     public boolean isKosong() {
         return riwayat.isEmpty();
