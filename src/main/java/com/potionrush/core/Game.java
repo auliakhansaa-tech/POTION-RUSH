@@ -9,177 +9,282 @@ import com.potionrush.brewing.PotionType;
 import com.potionrush.customer.Customer;
 import com.potionrush.customer.CustomerFactory;
 import com.potionrush.customer.CustomerState;
+import com.potionrush.ui.DisplayName;
 
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 
-// Menyimpan semua isi permainan dan mengatur jalannya permainan
 public class Game {
+
     public static final double DURASI_HARI = 150;
     public static final double JEDA_PETUALANG = 12;
     public static final int MAKS_PETUALANG = 3;
-    public static final int TARGET_KOIN = 60;
 
-    private final GameSession session = new GameSession();
-    private final List<Customer> petualang = new ArrayList<>();
-    private final List<Cauldron> kuali = List.of(new Cauldron(), new Cauldron());
-    private final CommandHistory riwayat = new CommandHistory();
-    private final Random acak = new Random();
+    private GameSession session = new GameSession();
+    private ArrayList<Customer> daftarPetualang = new ArrayList<>();
+    private ArrayList<Cauldron> daftarKuali = new ArrayList<>();
+    private CommandHistory riwayat = new CommandHistory();
+    private Random acak = new Random();
+
+    // Pola State: game hanya berjalan saat layar MAIN
+    private ScreenState layar = ScreenState.MENU;
 
     private double sisaWaktuHari = DURASI_HARI;
     private double waktuPetualangBerikutnya = 1;
-    private boolean selesai = false;
 
-    // Barang yang sedang dipegang pemain (hanya boleh satu)
+    private int koinHariIni = 0;
+    private int dilayaniHariIni = 0;
+    private int pergiHariIni = 0;
+    private String alasanGameOver = "";
+
     private Ingredient bahanDipegang = null;
     private PotionType ramuanDipegang = null;
+    private String pesan = "";
 
-    // Pesan singkat untuk ditampilkan di layar
-    private String pesan = "Klik bahan, lalu klik kuali.";
+    public Game() {
+        daftarKuali.add(new Cauldron());
+        daftarKuali.add(new Cauldron());
+    }
 
-    // ===================== GAME LOOP =====================
+    // ===== Perpindahan layar =====
 
-    // Dipanggil GameLoop setiap frame. dt = detik sejak frame sebelumnya.
+    public void mulai() {
+        session = new GameSession();
+        siapkanHari();
+        layar = ScreenState.MAIN;
+    }
+
+    public void lanjutHari() {
+        if (layar != ScreenState.RINGKASAN) {
+            return;
+        }
+        session.lanjutHari();
+        siapkanHari();
+        layar = ScreenState.MAIN;
+    }
+
+    public void keMenu() {
+        layar = ScreenState.MENU;
+    }
+
+    // Mengosongkan toko untuk hari baru. Total koin dan reputasi tidak direset.
+    private void siapkanHari() {
+        daftarPetualang.clear();
+        for (Cauldron kuali : daftarKuali) {
+            kuali.reset();
+        }
+        riwayat.hapusSemua();
+
+        sisaWaktuHari = DURASI_HARI;
+        waktuPetualangBerikutnya = 1;
+        koinHariIni = 0;
+        dilayaniHariIni = 0;
+        pergiHariIni = 0;
+        bahanDipegang = null;
+        ramuanDipegang = null;
+        pesan = "Day " + session.getHari() + " begins. Target: " + getTargetHari() + " coins.";
+    }
+
+    // Hari 1 targetnya 80 koin, lalu naik 20 setiap hari
+    public int getTargetHari() {
+        return 80 + 20 * (session.getHari() - 1);
+    }
+
+    // ===== Game loop =====
+
+    // Dipanggil GameLoop setiap frame. dt = jumlah detik sejak frame sebelumnya.
     public void update(double dt) {
-        if (selesai) {
+        if (layar != ScreenState.MAIN) {
             return;
         }
 
-        // 1. Waktu hari berjalan
-        sisaWaktuHari -= dt;
+        kurangiWaktuHari(dt);
+        if (layar != ScreenState.MAIN) {
+            return;
+        }
+
+        datangkanPetualang(dt);
+        kurangiKesabaranPetualang(dt);
+        updateKuali(dt);
+        cekKalah();
+    }
+
+    private void kurangiWaktuHari(double dt) {
+        sisaWaktuHari = sisaWaktuHari - dt;
+
         if (sisaWaktuHari <= 0) {
             sisaWaktuHari = 0;
-            selesai = true;
-            if (session.getKoin() >= TARGET_KOIN) {
-                pesan = "Hari selesai! Target tercapai.";
-            } else {
-                pesan = "Hari selesai. Target belum tercapai.";
-            }
-            return;
+            akhiriHari();
         }
+    }
 
-        // 2. Petualang baru datang secara berkala
-        waktuPetualangBerikutnya -= dt;
+    private void datangkanPetualang(double dt) {
+        waktuPetualangBerikutnya = waktuPetualangBerikutnya - dt;
+
         if (waktuPetualangBerikutnya <= 0) {
-            if (petualang.size() < MAKS_PETUALANG) {
-                petualang.add(CustomerFactory.buatAcak(acak));
+            if (daftarPetualang.size() < MAKS_PETUALANG) {
+                Customer petualangBaru = CustomerFactory.buatAcak(acak, session.getHari());
+                daftarPetualang.add(petualangBaru);
             }
             waktuPetualangBerikutnya = JEDA_PETUALANG;
         }
+    }
 
-        // 3. Kesabaran berkurang, petualang yang pergi dihapus
-        for (int i = petualang.size() - 1; i >= 0; i--) {
-            Customer c = petualang.get(i);
-            c.kurangiKesabaran(dt);
-            if (c.getStatus() == CustomerState.PERGI) {
-                petualang.remove(i);
+    private void kurangiKesabaranPetualang(double dt) {
+        // Dari belakang ke depan, supaya aman saat menghapus isi list
+        for (int i = daftarPetualang.size() - 1; i >= 0; i--) {
+            Customer petualang = daftarPetualang.get(i);
+            petualang.kurangiKesabaran(dt);
+
+            if (petualang.getStatus() == CustomerState.PERGI) {
+                daftarPetualang.remove(i);
                 session.kurangiReputasi();
-                pesan = c.getJenis() + " pergi karena terlalu lama menunggu.";
+                pergiHariIni++;
+                pesan = "The " + petualang.getJenis() + " left after waiting too long.";
             }
-        }
-
-        // 4. Kuali yang sedang mendidih
-        for (Cauldron k : kuali) {
-            k.update(dt);
-        }
-
-        // 5. Cek kalah
-        if (session.isKalah()) {
-            selesai = true;
-            pesan = "Reputasi habis. Permainan berakhir.";
         }
     }
 
-    // ===================== AKSI PEMAIN =====================
-    // Dipanggil dari tampilan (GameView) saat pemain mengklik sesuatu
+    private void updateKuali(double dt) {
+        for (Cauldron kuali : daftarKuali) {
+            kuali.update(dt);
+        }
+    }
+
+    private void cekKalah() {
+        if (session.isKalah()) {
+            alasanGameOver = "Your shop's reputation ran out.";
+            layar = ScreenState.GAME_OVER;
+        }
+    }
+
+    private void akhiriHari() {
+        if (koinHariIni >= getTargetHari()) {
+            layar = ScreenState.RINGKASAN;
+        } else {
+            alasanGameOver = "You didn't reach today's coin target.";
+            layar = ScreenState.GAME_OVER;
+        }
+    }
+
+    // ===== Aksi pemain (dipanggil saat layar diklik) =====
 
     public void klikBahan(Ingredient bahan) {
-        if (selesai) {
+        if (layar != ScreenState.MAIN) {
             return;
         }
         if (ramuanDipegang != null) {
-            pesan = "Serahkan dulu ramuan yang sedang dipegang.";
+            pesan = "Serve the potion you're holding first.";
             return;
         }
         bahanDipegang = bahan;
-        pesan = "Memegang " + bahan + ". Klik kuali untuk memasukkannya.";
+        pesan = "Holding " + DisplayName.bahan(bahan) + ". Click a cauldron to add it.";
     }
 
-    public void klikKuali(int nomor) {
-        if (selesai) {
+    public void klikKuali(int nomorKuali) {
+        if (layar != ScreenState.MAIN) {
             return;
         }
-        Cauldron k = kuali.get(nomor);
+        Cauldron kuali = daftarKuali.get(nomorKuali);
 
-        // a. Sedang memegang bahan: masukkan ke kuali
         if (bahanDipegang != null) {
-            riwayat.jalankan(new AddIngredientCommand(k, bahanDipegang));
+            // Sedang memegang bahan: masukkan bahan ke kuali
+            riwayat.jalankan(new AddIngredientCommand(kuali, bahanDipegang));
             bahanDipegang = null;
-            pesan = "Bahan masuk. Klik kuali lagi untuk mendidihkan.";
-            return;
-        }
+            pesan = "Ingredient added. Click the cauldron again to boil it.";
 
-        // b. Tangan kosong dan kuali sudah diisi: mulai mendidih
-        if (k.getStatus() == CauldronState.DIISI) {
-            k.mulaiMendidih();
-            pesan = "Kuali " + (nomor + 1) + " mulai mendidih.";
-            return;
-        }
+        } else if (kuali.getStatus() == CauldronState.DIISI) {
+            // Tangan kosong dan kuali sudah ada isinya: mulai mendidih
+            kuali.mulaiMendidih();
+            pesan = "Cauldron " + (nomorKuali + 1) + " is boiling.";
 
-        // c. Tangan kosong dan ramuan siap: ambil ramuan
-        if (k.getStatus() == CauldronState.SIAP && ramuanDipegang == null) {
-            PotionType hasil = k.ambilRamuan();
+        } else if (kuali.getStatus() == CauldronState.SIAP && ramuanDipegang == null) {
+            // Ramuan sudah siap: ambil ramuannya
+            PotionType hasil = kuali.ambilRamuan();
             if (hasil == null) {
-                pesan = "Ramuan gagal, urutan bahan salah. Ramuan dibuang.";
+                pesan = "The potion failed because the order was wrong. It was thrown away.";
             } else {
                 ramuanDipegang = hasil;
-                pesan = "Memegang ramuan " + hasil + ". Klik petualang yang memesannya.";
+                pesan = "Holding " + DisplayName.ramuan(hasil) + ". Click the adventurer who ordered it.";
             }
         }
     }
 
-    public void klikPetualang(int nomor) {
-        if (selesai || ramuanDipegang == null || nomor >= petualang.size()) {
+    public void klikPetualang(int nomorPetualang) {
+        if (layar != ScreenState.MAIN) {
             return;
         }
-        Customer c = petualang.get(nomor);
-        int bayaran = c.hitungBayaran();
-        if (c.layani(ramuanDipegang)) {
+        if (ramuanDipegang == null) {
+            return;
+        }
+        if (nomorPetualang >= daftarPetualang.size()) {
+            return;
+        }
+
+        Customer petualang = daftarPetualang.get(nomorPetualang);
+        int bayaran = petualang.hitungBayaran();
+
+        if (petualang.layani(ramuanDipegang)) {
             session.tambahKoin(bayaran);
-            petualang.remove(nomor);
+            koinHariIni = koinHariIni + bayaran;
+            dilayaniHariIni++;
+            daftarPetualang.remove(nomorPetualang);
             ramuanDipegang = null;
-            pesan = c.getJenis() + " membayar " + bayaran + " koin.";
+            pesan = "The " + petualang.getJenis() + " paid " + bayaran + " coins.";
         } else {
-            pesan = "Ramuan salah! " + c.getJenis() + " memesan " + c.getPesanan() + ".";
+            pesan = "Wrong potion! The " + petualang.getJenis() + " ordered " + DisplayName.ramuan(petualang.getPesanan()) + ".";
         }
     }
 
     public void undo() {
-        riwayat.undo();
-        pesan = "Bahan terakhir dibatalkan.";
+        if (layar != ScreenState.MAIN) {
+            return;
+        }
+
+        boolean berhasil = riwayat.undo();
+        if (berhasil) {
+            pesan = "Last ingredient removed.";
+        } else {
+            pesan = "Nothing to undo.";
+        }
     }
 
-    // ===================== GETTER =====================
+    // ===== Getter =====
+
+    public ScreenState getLayar() {
+        return layar;
+    }
 
     public GameSession getSession() {
         return session;
     }
 
-    public List<Customer> getPetualang() {
-        return petualang;
+    public ArrayList<Customer> getPetualang() {
+        return daftarPetualang;
     }
 
-    public List<Cauldron> getKuali() {
-        return kuali;
+    public ArrayList<Cauldron> getKuali() {
+        return daftarKuali;
     }
 
     public double getSisaWaktuHari() {
         return sisaWaktuHari;
     }
 
-    public boolean isSelesai() {
-        return selesai;
+    public int getKoinHariIni() {
+        return koinHariIni;
+    }
+
+    public int getDilayaniHariIni() {
+        return dilayaniHariIni;
+    }
+
+    public int getPergiHariIni() {
+        return pergiHariIni;
+    }
+
+    public String getAlasanGameOver() {
+        return alasanGameOver;
     }
 
     public Ingredient getBahanDipegang() {
