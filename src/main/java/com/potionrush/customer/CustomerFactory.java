@@ -7,35 +7,51 @@ import java.util.Random;
 public class CustomerFactory {
 
     public static Customer buatKsatria(PotionType pesanan) {
-        return new Customer("Ksatria", pesanan, new SabarNormal());
+        return new Customer("Knight", pesanan, new NormalPatience());
     }
 
     public static Customer buatPencuri(PotionType pesanan) {
-        return new Customer("Pencuri", pesanan, new SabarPendek());
+        return new Customer("Thief", pesanan, new ShortPatience());
     }
 
     public static Customer buatPenyihir(PotionType pesanan) {
-        return new Customer("Penyihir", pesanan, new SabarPanjang());
+        return new Customer("Wizard", pesanan, new LongPatience());
     }
 
     public static Customer buatAcak(Random acak) {
+        return buatAcak(acak, 1);
+    }
+
+    public static Customer buatAcak(Random acak, int hari) {
         int jenis = acak.nextInt(3);
 
-        if (jenis == 2) {
-            PotionType pesanan = acak.nextBoolean()
-                    ? PotionType.RACUN
-                    : PotionType.TAK_TERLIHAT;
-
-            return buatPenyihir(pesanan);
-        }
-
-        PotionType[] semua = PotionType.values();
-        PotionType pesanan = semua[acak.nextInt(semua.length)];
-
         if (jenis == 0) {
-            return buatKsatria(pesanan);
-        }
+            PotionType pesanan = ambilRamuanAcak(acak);
+            return new Customer("Knight", pesanan,
+                    new DailyPatience(new NormalPatience(), hari));
 
-        return buatPencuri(pesanan);
+        } else if (jenis == 1) {
+            PotionType pesanan = ambilRamuanAcak(acak);
+            return new Customer("Thief", pesanan,
+                    new DailyPatience(new ShortPatience(), hari));
+
+        } else {
+            PotionType pesanan;
+
+            if (acak.nextBoolean()) {
+                pesanan = PotionType.RACUN;
+            } else {
+                pesanan = PotionType.TAK_TERLIHAT;
+            }
+
+            return new Customer("Wizard", pesanan,
+                    new DailyPatience(new LongPatience(), hari));
+        }
+    }
+
+    private static PotionType ambilRamuanAcak(Random acak) {
+        PotionType[] semuaRamuan = PotionType.values();
+        int nomor = acak.nextInt(semuaRamuan.length);
+        return semuaRamuan[nomor];
     }
 }

@@ -1,6 +1,6 @@
 package com.potionrush.customer;
 
-public class SabarPanjang implements PatienceStrategy {
+public class LongPatience implements PatienceStrategy {
 
     @Override
     public double getKesabaranAwal() {
