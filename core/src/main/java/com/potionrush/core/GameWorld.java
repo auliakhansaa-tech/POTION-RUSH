@@ -14,7 +14,7 @@ import com.potionrush.ui.DisplayName;
 import java.util.ArrayList;
 import java.util.Random;
 
-public class Game {
+public class GameWorld {
 
     public static final double DURASI_HARI = 150;
     public static final double JEDA_PETUALANG = 12;
@@ -41,7 +41,7 @@ public class Game {
     private PotionType ramuanDipegang = null;
     private String pesan = "";
 
-    public Game() {
+    public GameWorld() {
         daftarKuali.add(new Cauldron());
         daftarKuali.add(new Cauldron());
     }
